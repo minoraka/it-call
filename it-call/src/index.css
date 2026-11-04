@@ -1,14 +1,90 @@
-:root { color-scheme: light; }
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --red: #d0293a;
+  --red-soft: rgba(208, 41, 58, 0.1);
+  --ink: #1c1c1e;
+  --muted: #8e8e93;
+  --green: #34a853;
+  --amber: #f08c1a;
+  --done: #aeaeb2;
+
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.85);
+  --panel-shadow: 0 10px 30px rgba(20, 20, 40, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --tile-bg: rgba(255, 255, 255, 0.75);
+  --tile-border: rgba(255, 255, 255, 0.9);
+  --tile-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --tile-hover-shadow: 0 8px 20px rgba(20, 20, 40, 0.09);
+  --field-bg: rgba(255, 255, 255, 0.85);
+  --modal-bg: rgba(255, 255, 255, 0.94);
+  --modal-border: #fff;
+  --modal-field: #f4f4f6;
+  --line: rgba(0, 0, 0, 0.07);
+  --chip-bg: rgba(0, 0, 0, 0.05);
+  --btn-hover: #fff;
+  --chev: #b8b8bd;
+  --desc: #48484a;
+  --placeholder: #aeaeb2;
+  --dot-base: #fff;
+  --overlay: rgba(30, 30, 40, 0.35);
+  --toast-bg: #1c1c1e;
+  --toast-ink: #fff;
+
+  --bg-glow: #d9daf2;
+  --bg-a: #eeeeef;
+  --bg-b: #f3f3f4;
+}
+
+/* ---------- Тёмная тема ---------- */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --red: #ee4558;
+  --red-soft: rgba(238, 69, 88, 0.16);
+  --ink: #f2f2f5;
+  --muted: #9a9aa3;
+  --green: #4cc16f;
+  --amber: #f5a042;
+  --done: #6e6e76;
+
+  --glass: rgba(34, 34, 40, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --panel-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --tile-bg: rgba(255, 255, 255, 0.05);
+  --tile-border: rgba(255, 255, 255, 0.07);
+  --tile-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --tile-hover-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  --field-bg: rgba(255, 255, 255, 0.06);
+  --modal-bg: rgba(30, 30, 36, 0.96);
+  --modal-border: rgba(255, 255, 255, 0.1);
+  --modal-field: rgba(255, 255, 255, 0.07);
+  --line: rgba(255, 255, 255, 0.1);
+  --chip-bg: rgba(255, 255, 255, 0.08);
+  --btn-hover: rgba(255, 255, 255, 0.14);
+  --chev: #6b6b73;
+  --desc: #c7c7cc;
+  --placeholder: #6e6e76;
+  --dot-base: #26262b;
+  --overlay: rgba(0, 0, 0, 0.55);
+  --toast-bg: #f2f2f5;
+  --toast-ink: #1c1c1e;
+
+  --bg-glow: rgba(110, 110, 190, 0.28);
+  --bg-a: #131316;
+  --bg-b: #0e0e11;
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body {
   min-height: 100vh;
-  color: #1c1c1e;
+  color: var(--ink);
   font-family: 'Manrope', system-ui, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   background:
-    radial-gradient(900px 280px at 50% -40px, #d9daf2 0%, rgba(217, 218, 242, 0) 75%),
-    linear-gradient(180deg, #eeeeef, #f3f3f4);
+    radial-gradient(900px 280px at 50% -40px, var(--bg-glow) 0%, transparent 75%),
+    linear-gradient(180deg, var(--bg-a), var(--bg-b));
   background-attachment: fixed;
 }
 #root { width: 100%; }

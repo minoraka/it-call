@@ -15,7 +15,7 @@ class TechnicianSerializer(serializers.ModelSerializer):
 
 
 class RoomSerializer(serializers.ModelSerializer):
-    """Аудитория с вычисленным статусом: ok / new / taken."""
+   
 
     room = serializers.CharField(source="number")
     techId = serializers.IntegerField(source="technician_id")
@@ -28,7 +28,7 @@ class RoomSerializer(serializers.ModelSerializer):
         fields = ["room", "techId", "techName", "status", "category"]
 
     def _active(self, obj):
-        # active_tickets подгружается Prefetch'ем во view (новые первыми)
+       
         return getattr(obj, "active_tickets", [])
 
     def get_status(self, obj):

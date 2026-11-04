@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from './api';
+import { makeT, categoryLabel, detectLang } from './i18n';
 import './App.css';
 
-const statusText = { ok: 'Всё работает', new: 'Вызов отправлен', taken: 'Специалист идёт', done: 'Решено' };
 const POLL_MS = 5000;
-
-const time = (ts) => new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 const emptyForm = { teacher: '', room: '', category: '', text: '' };
 
 const beep = () => {
@@ -24,24 +22,44 @@ const SearchIcon = () => <Svg size={16}><circle cx="11" cy="11" r="7" /><path d=
 const GridIcon = () => <Svg size={16}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></Svg>;
 const ListIcon = () => <Svg size={16}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></Svg>;
 const ChevronIcon = () => <span className="chev"><Svg size={16}><path d="m9 18 6-6-6-6" /></Svg></span>;
+const MoonIcon = () => <Svg><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></Svg>;
+const SunIcon = () => <Svg><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></Svg>;
 
 function App() {
+  const [lang, setLang] = useState(detectLang);
+  const [theme, setTheme] = useState(() => (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'));
   const [role, setRole] = useState('teacher');
   const [techs, setTechs] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [rooms, setRooms] = useState([]);     // [{room, techId, techName, status, category}]
-  const [tickets, setTickets] = useState([]); // очередь выбранного специалиста
+  const [rooms, setRooms] = useState([]);     
+  const [tickets, setTickets] = useState([]); 
   const [techId, setTechId] = useState(null);
-  const [loadError, setLoadError] = useState('');
+  const [loadError, setLoadError] = useState(''); 
   const [tab, setTab] = useState('all');
   const [q, setQ] = useState('');
   const [onlyBad, setOnlyBad] = useState(false);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  const [error, setError] = useState('');
+  const [error, setError] = useState('');       
   const [toast, setToast] = useState('');
   const [sending, setSending] = useState(false);
   const toastTimer = useRef(null);
+
+  const t = makeT(lang);
+  const cat = (c) => categoryLabel(lang, c);
+  const langRef = useRef(lang); 
+
+ 
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('it-theme', theme); } catch { /* ignore */ }
+  }, [theme]);
+  useEffect(() => {
+    langRef.current = lang;
+    document.documentElement.lang = lang;
+    document.title = makeT(lang)('title');
+    try { localStorage.setItem('it-lang', lang); } catch { /* ignore */ }
+  }, [lang]);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -49,23 +67,27 @@ function App() {
     toastTimer.current = setTimeout(() => setToast(''), 4000);
   };
 
-  // Справочники: специалисты, типы неисправностей
+  // Ошибка API -> ключ перевода (тексты ошибок сервера всегда русские, поэтому по статусу)
+  const errKey = (err) => (err.status === 409 ? 'err.conflict' : err.status ? 'err.invalid' : 'err.network');
+
+  const time = (ts) => new Date(ts).toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
+
+ 
   useEffect(() => {
     Promise.all([api.technicians(), api.categories()])
-      .then(([t, c]) => {
-        setTechs(t);
+      .then(([tc, c]) => {
+        setTechs(tc);
         setCategories(c);
-        setTechId((cur) => cur ?? t[0]?.id ?? null);
+        setTechId((cur) => cur ?? tc[0]?.id ?? null);
       })
-      .catch(() => setLoadError('Не удалось подключиться к серверу. Запущен ли бэкенд?'));
+      .catch(() => setLoadError('err.server'));
   }, []);
 
-  // Живое обновление (раньше было событие storage): опрос сервера.
-  // Преподаватель — статусы аудиторий, специалист — своя очередь + звук/уведомление о новых заявках.
+  
   useEffect(() => {
     if (role === 'tech' && techId == null) return;
     let stopped = false;
-    let known = null; // id заявок, которые уже видели; null до первой загрузки
+    let known = null; 
 
     const tick = async () => {
       try {
@@ -76,20 +98,23 @@ function App() {
           const next = await api.tickets({ techId });
           if (stopped) return;
           if (known) {
-            const fresh = next.filter((t) => t.status === 'new' && !known.has(t.id));
+            const fresh = next.filter((x) => x.status === 'new' && !known.has(x.id));
             if (fresh.length) {
               beep();
               if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification('Вызов айтишника', { body: `Ауд. ${fresh[0].room}: ${fresh[0].category}` });
+                const tr = makeT(langRef.current);
+                new Notification(tr('notifTitle'), {
+                  body: tr('notifBody', { room: fresh[0].room, category: categoryLabel(langRef.current, fresh[0].category) }),
+                });
               }
             }
           }
-          known = new Set(next.map((t) => t.id));
+          known = new Set(next.map((x) => x.id));
           setTickets(next);
           setLoadError('');
         }
       } catch {
-        if (!stopped) setLoadError('Нет связи с сервером. Повторяем…');
+        if (!stopped) setLoadError('err.retry');
       }
     };
 
@@ -98,7 +123,7 @@ function App() {
     return () => { stopped = true; clearInterval(id); };
   }, [role, techId]);
 
-  // Список аудиторий для преподавателя нужен и в форме — подгружаем один раз при старте
+ 
   useEffect(() => { api.rooms().then(setRooms).catch(() => {}); }, []);
 
   const faulty = rooms.filter((r) => r.status !== 'ok').length;
@@ -115,18 +140,18 @@ function App() {
   const send = async (e) => {
     e.preventDefault();
     if (!form.teacher.trim() || !form.room || !form.category) {
-      setError('Укажите имя, аудиторию и тип неисправности.');
+      setError('err.required');
       return;
     }
     setSending(true);
     try {
       const ticket = await api.createTicket({ ...form, teacher: form.teacher.trim() });
-      const tech = techs.find((t) => t.id === ticket.techId);
+      const tech = techs.find((x) => x.id === ticket.techId);
       setModal(false);
-      showToast(`Заявка отправлена: ${tech?.name ?? ''}, ауд. ${ticket.room}`);
+      showToast(t('sent', { tech: tech?.name ?? '', room: ticket.room }));
       api.rooms().then(setRooms).catch(() => {});
     } catch (err) {
-      setError(err.message);
+      setError(errKey(err));
     } finally {
       setSending(false);
     }
@@ -135,45 +160,59 @@ function App() {
   const setStatus = async (id, action) => {
     try {
       const updated = await api[action](id);
-      setTickets((ts) => ts.map((t) => (t.id === id ? updated : t)));
+      setTickets((ts) => ts.map((x) => (x.id === id ? updated : x)));
     } catch (err) {
-      showToast(err.message);
-      api.tickets({ techId }).then(setTickets).catch(() => {}); // подтянуть актуальное состояние
+      showToast(t(errKey(err)));
+      api.tickets({ techId }).then(setTickets).catch(() => {}); 
     }
   };
 
   const queue = [...tickets].sort((a, b) => (a.status === 'done') - (b.status === 'done') || b.at - a.at);
   const modalRoom = form.room && rooms.find((r) => r.room === form.room);
-  const currentTech = techs.find((t) => t.id === techId);
-  const count = (st) => queue.filter((t) => t.status === st).length;
+  const currentTech = techs.find((x) => x.id === techId);
+  const count = (st) => queue.filter((x) => x.status === st).length;
 
   const stats = role === 'teacher'
-    ? [['ВСЕГО', rooms.length], ['НЕИСПРАВНО', faulty], ['РАБОТАЕТ', rooms.length - faulty, 'good']]
-    : [['НОВЫЕ', count('new')], ['В РАБОТЕ', count('taken')], ['РЕШЕНО', count('done'), 'good']];
+    ? [[t('statTotal'), rooms.length], [t('statFaulty'), faulty], [t('statWorking'), rooms.length - faulty, 'good']]
+    : [[t('statNew'), count('new')], [t('statTaken'), count('taken')], [t('statDone'), count('done'), 'good']];
 
   return (
     <div className="app">
       <div className="topbar">
         <div className="seg">
-          <button className={role === 'teacher' ? 'on' : ''} onClick={() => setRole('teacher')}>Преподаватель</button>
-          <button className={role === 'tech' ? 'on' : ''} onClick={() => setRole('tech')}>Специалист</button>
+          <button className={role === 'teacher' ? 'on' : ''} onClick={() => setRole('teacher')}>{t('teacher')}</button>
+          <button className={role === 'tech' ? 'on' : ''} onClick={() => setRole('tech')}>{t('tech')}</button>
+        </div>
+        <div className="tools">
+          <div className="seg mini" role="group" aria-label={t('langLabel')}>
+            <button className={lang === 'ru' ? 'on' : ''} onClick={() => setLang('ru')} aria-pressed={lang === 'ru'}>RU</button>
+            <button className={lang === 'en' ? 'on' : ''} onClick={() => setLang('en')} aria-pressed={lang === 'en'}>EN</button>
+          </div>
+          <button
+            className="icon-btn"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            aria-label={theme === 'dark' ? t('themeToLight') : t('themeToDark')}
+            title={theme === 'dark' ? t('themeToLight') : t('themeToDark')}
+          >
+            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+          </button>
         </div>
       </div>
 
       <section className="panel hero">
-        <small className="eyebrow">{role === 'teacher' ? 'IT-ПОДДЕРЖКА КОЛЛЕДЖА' : 'ПАНЕЛЬ СПЕЦИАЛИСТА'}</small>
-        <h1>{role === 'teacher' ? 'Аудитории' : 'Заявки'}</h1>
+        <small className="eyebrow">{role === 'teacher' ? t('eyebrowTeacher') : t('eyebrowTech')}</small>
+        <h1>{role === 'teacher' ? t('h1Teacher') : t('h1Tech')}</h1>
         <div className="stats">
           {stats.map(([label, value, tone]) => (
             <div key={label} className={`stat ${tone || ''}`}><span>{label}</span><b>{value}</b></div>
           ))}
         </div>
         <button className="cta" onClick={() => (role === 'teacher' ? openCall() : 'Notification' in window && Notification.requestPermission())}>
-          <BellIcon /> {role === 'teacher' ? 'Вызвать айтишника' : 'Включить уведомления'}
+          <BellIcon /> {role === 'teacher' ? t('callIt') : t('enableNotify')}
         </button>
       </section>
 
-      {loadError && <p className="error" role="alert">{loadError}</p>}
+      {loadError && <p className="error" role="alert">{t(loadError)}</p>}
 
       {role === 'teacher' ? (
         <>
@@ -181,35 +220,35 @@ function App() {
             <div className="search-row">
               <label className="search-wrap">
                 <SearchIcon />
-                <input placeholder="Номер аудитории" value={q} onChange={(e) => setQ(e.target.value)} />
+                <input placeholder={t('searchPlaceholder')} value={q} onChange={(e) => setQ(e.target.value)} />
               </label>
-              <button className="reset" onClick={resetFilters}>Сбросить</button>
+              <button className="reset" onClick={resetFilters}>{t('reset')}</button>
             </div>
             <div className="seg wide">
-              <button className={tab === 'all' ? 'on' : ''} onClick={() => setTab('all')}>Все</button>
-              {techs.map((t) => (
-                <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>{t.name}</button>
+              <button className={tab === 'all' ? 'on' : ''} onClick={() => setTab('all')}>{t('all')}</button>
+              {techs.map((x) => (
+                <button key={x.id} className={tab === x.id ? 'on' : ''} onClick={() => setTab(x.id)}>{x.name}</button>
               ))}
             </div>
             <label className="check">
-              <input type="checkbox" checked={onlyBad} onChange={(e) => setOnlyBad(e.target.checked)} /> Только неисправные
+              <input type="checkbox" checked={onlyBad} onChange={(e) => setOnlyBad(e.target.checked)} /> {t('onlyFaulty')}
             </label>
           </section>
 
           <section className="panel">
-            <h2 className="sect"><GridIcon /> аудитории</h2>
+            <h2 className="sect"><GridIcon /> {t('sectRooms')}</h2>
             <div className="grid">
               {visible.map((r) => (
                 <button key={r.room} className={`tile ${r.status}`} onClick={() => openCall(r.room)}>
                   <i className="dot" />
                   <span className="tile-body">
-                    <b>Ауд. {r.room}{r.category && <em>{r.category}</em>}</b>
-                    <small>{statusText[r.status]} · {r.techName}</small>
+                    <b>{t('room', { n: r.room })}{r.category && <em>{cat(r.category)}</em>}</b>
+                    <small>{t(`status.${r.status}`)} · {r.techName}</small>
                   </span>
                   <ChevronIcon />
                 </button>
               ))}
-              {!visible.length && <p className="empty">Ничего не найдено.</p>}
+              {!visible.length && <p className="empty">{t('notFound')}</p>}
             </div>
           </section>
         </>
@@ -217,29 +256,29 @@ function App() {
         <>
           <section className="panel">
             <div className="seg wide">
-              {techs.map((t) => (
-                <button key={t.id} className={techId === t.id ? 'on' : ''} onClick={() => { setTickets([]); setTechId(t.id); }}>{t.name}</button>
+              {techs.map((x) => (
+                <button key={x.id} className={techId === x.id ? 'on' : ''} onClick={() => { setTickets([]); setTechId(x.id); }}>{x.name}</button>
               ))}
             </div>
-            <p className="label">Мои аудитории: {currentTech?.rooms.join(', ')}</p>
+            <p className="label">{t('myRooms')}: {currentTech?.rooms.join(', ')}</p>
           </section>
 
           <section className="panel">
-            <h2 className="sect"><ListIcon /> заявки</h2>
+            <h2 className="sect"><ListIcon /> {t('sectTickets')}</h2>
             <div className="list">
-              {queue.map((t) => (
-                <div key={t.id} className={`tile static ${t.status}`}>
+              {queue.map((x) => (
+                <div key={x.id} className={`tile static ${x.status}`}>
                   <i className="dot" />
                   <div className="tile-body">
-                    <b>Ауд. {t.room}<em>{t.category}</em></b>
-                    <small>{statusText[t.status]} · {t.teacher} · {time(t.at)}</small>
-                    {t.text && <p className="desc">{t.text}</p>}
+                    <b>{t('room', { n: x.room })}<em>{cat(x.category)}</em></b>
+                    <small>{t(`status.${x.status}`)} · {x.teacher} · {time(x.at)}</small>
+                    {x.text && <p className="desc">{x.text}</p>}
                   </div>
-                  {t.status === 'new' && <button className="act" onClick={() => setStatus(t.id, 'take')}>Принять</button>}
-                  {t.status === 'taken' && <button className="act ok" onClick={() => setStatus(t.id, 'done')}>Решено</button>}
+                  {x.status === 'new' && <button className="act" onClick={() => setStatus(x.id, 'take')}>{t('accept')}</button>}
+                  {x.status === 'taken' && <button className="act ok" onClick={() => setStatus(x.id, 'done')}>{t('solved')}</button>}
                 </div>
               ))}
-              {!queue.length && <p className="empty">Заявок нет — всё работает.</p>}
+              {!queue.length && <p className="empty">{t('noTickets')}</p>}
             </div>
           </section>
         </>
@@ -248,33 +287,33 @@ function App() {
       {modal && (
         <div className="overlay" onClick={() => setModal(false)}>
           <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={send}>
-            <h2>Вызов айтишника</h2>
-            <label>Ваше имя
-              <input value={form.teacher} onChange={field('teacher')} placeholder="Например, Мария Сергеевна" />
+            <h2>{t('modalTitle')}</h2>
+            <label>{t('yourName')}
+              <input value={form.teacher} onChange={field('teacher')} placeholder={t('namePlaceholder')} />
             </label>
-            <label>Аудитория
+            <label>{t('roomLabel')}
               <select value={form.room} onChange={field('room')}>
-                <option value="">Выберите аудиторию</option>
-                {techs.map((t) => (
-                  <optgroup key={t.id} label={t.name}>
-                    {t.rooms.map((r) => <option key={r} value={r}>Ауд. {r}</option>)}
+                <option value="">{t('chooseRoom')}</option>
+                {techs.map((x) => (
+                  <optgroup key={x.id} label={x.name}>
+                    {x.rooms.map((r) => <option key={r} value={r}>{t('room', { n: r })}</option>)}
                   </optgroup>
                 ))}
               </select>
             </label>
-            {modalRoom && <p className="hint">Заявку получит: <b>{modalRoom.techName}</b></p>}
+            {modalRoom && <p className="hint">{t('willReceive')} <b>{modalRoom.techName}</b></p>}
             <div className="chips">
               {categories.map((c) => (
-                <button type="button" key={c} className={form.category === c ? 'on' : ''} onClick={() => setForm({ ...form, category: c })}>{c}</button>
+                <button type="button" key={c} className={form.category === c ? 'on' : ''} onClick={() => setForm({ ...form, category: c })}>{cat(c)}</button>
               ))}
             </div>
-            <label>Описание (по желанию)
-              <textarea rows="2" value={form.text} onChange={field('text')} placeholder="Например, проектор не включается" />
+            <label>{t('descOptional')}
+              <textarea rows="2" value={form.text} onChange={field('text')} placeholder={t('descPlaceholder')} />
             </label>
-            {error && <p className="error" role="alert">{error}</p>}
+            {error && <p className="error" role="alert">{t(error)}</p>}
             <div className="row">
-              <button type="button" className="reset" onClick={() => setModal(false)}>Отмена</button>
-              <button type="submit" className="cta" disabled={sending}>{sending ? 'Отправка…' : 'Отправить'}</button>
+              <button type="button" className="reset" onClick={() => setModal(false)}>{t('cancel')}</button>
+              <button type="submit" className="cta" disabled={sending}>{sending ? t('sending') : t('send')}</button>
             </div>
           </form>
         </div>

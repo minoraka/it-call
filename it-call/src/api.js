@@ -1,5 +1,4 @@
-// Положите в it-call/src/api.js
-// В dev-режиме запросы идут на /api и проксируются Vite на Django (см. vite.config.js).
+
 const BASE = import.meta.env.VITE_API_URL ?? '/api';
 
 async function request(path, options = {}) {
@@ -10,8 +9,10 @@ async function request(path, options = {}) {
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     // DRF отдаёт ошибки валидации как { поле: ['текст'] } или { detail: 'текст' }
-    const msg = data?.detail ?? (data && Object.values(data).flat().join(' ')) ?? 'Ошибка сервера';
-    throw new Error(msg);
+    const msg = data?.detail ?? (data && Object.values(data).flat().join(' ')) ?? 'Server error';
+    const err = new Error(msg);
+    err.status = res.status; 
+    throw err;
   }
   return data;
 }

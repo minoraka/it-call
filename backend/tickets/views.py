@@ -128,7 +128,7 @@ class TicketViewSet(
 
     @action(detail=True, methods=["post"])
     def take(self, request, pk=None):
-        self.get_object()  # 404, если заявки нет
+        self.get_object()  
         return self._move(pk, Ticket.Status.NEW, Ticket.Status.TAKEN, "taken_at")
 
     @action(detail=True, methods=["post"])
