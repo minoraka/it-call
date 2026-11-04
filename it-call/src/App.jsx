@@ -16,6 +16,15 @@ const beep = () => {
   } catch { /* звук недоступен */ }
 };
 
+const Svg = ({ size = 18, children }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
+);
+const BellIcon = () => <Svg><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></Svg>;
+const SearchIcon = () => <Svg size={16}><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></Svg>;
+const GridIcon = () => <Svg size={16}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></Svg>;
+const ListIcon = () => <Svg size={16}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></Svg>;
+const ChevronIcon = () => <span className="chev"><Svg size={16}><path d="m9 18 6-6-6-6" /></Svg></span>;
+
 function App() {
   const [role, setRole] = useState('teacher');
   const [techs, setTechs] = useState([]);
@@ -136,74 +145,103 @@ function App() {
   const queue = [...tickets].sort((a, b) => (a.status === 'done') - (b.status === 'done') || b.at - a.at);
   const modalRoom = form.room && rooms.find((r) => r.room === form.room);
   const currentTech = techs.find((t) => t.id === techId);
+  const count = (st) => queue.filter((t) => t.status === st).length;
+
+  const stats = role === 'teacher'
+    ? [['ВСЕГО', rooms.length], ['НЕИСПРАВНО', faulty], ['РАБОТАЕТ', rooms.length - faulty, 'good']]
+    : [['НОВЫЕ', count('new')], ['В РАБОТЕ', count('taken')], ['РЕШЕНО', count('done'), 'good']];
 
   return (
     <div className="app">
-      <div className="pills">
-        <button className={role === 'teacher' ? 'on' : ''} onClick={() => setRole('teacher')}>Преподаватель</button>
-        <button className={role === 'tech' ? 'on' : ''} onClick={() => setRole('tech')}>Специалист</button>
+      <div className="topbar">
+        <div className="seg">
+          <button className={role === 'teacher' ? 'on' : ''} onClick={() => setRole('teacher')}>Преподаватель</button>
+          <button className={role === 'tech' ? 'on' : ''} onClick={() => setRole('tech')}>Специалист</button>
+        </div>
       </div>
 
-      <div className="banner">
-        <div>
-          <small>● {faulty} неисправно, {rooms.length} аудиторий</small>
-          <h1>{role === 'teacher' ? 'АУДИТОРИИ' : 'ЗАЯВКИ'}</h1>
+      <section className="panel hero">
+        <small className="eyebrow">{role === 'teacher' ? 'IT-ПОДДЕРЖКА КОЛЛЕДЖА' : 'ПАНЕЛЬ СПЕЦИАЛИСТА'}</small>
+        <h1>{role === 'teacher' ? 'Аудитории' : 'Заявки'}</h1>
+        <div className="stats">
+          {stats.map(([label, value, tone]) => (
+            <div key={label} className={`stat ${tone || ''}`}><span>{label}</span><b>{value}</b></div>
+          ))}
         </div>
         <button className="cta" onClick={() => (role === 'teacher' ? openCall() : 'Notification' in window && Notification.requestPermission())}>
-          {role === 'teacher' ? '🔔 Вызвать айтишника' : '🔔 Включить уведомления'}
+          <BellIcon /> {role === 'teacher' ? 'Вызвать айтишника' : 'Включить уведомления'}
         </button>
-      </div>
+      </section>
 
       {loadError && <p className="error" role="alert">{loadError}</p>}
 
       {role === 'teacher' ? (
         <>
-          <div className="filters">
-            <input className="search" placeholder="Номер аудитории" value={q} onChange={(e) => setQ(e.target.value)} />
-            <button className="reset" onClick={resetFilters}>Сбросить фильтры</button>
+          <section className="panel">
+            <div className="search-row">
+              <label className="search-wrap">
+                <SearchIcon />
+                <input placeholder="Номер аудитории" value={q} onChange={(e) => setQ(e.target.value)} />
+              </label>
+              <button className="reset" onClick={resetFilters}>Сбросить</button>
+            </div>
+            <div className="seg wide">
+              <button className={tab === 'all' ? 'on' : ''} onClick={() => setTab('all')}>Все</button>
+              {techs.map((t) => (
+                <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>{t.name}</button>
+              ))}
+            </div>
             <label className="check">
               <input type="checkbox" checked={onlyBad} onChange={(e) => setOnlyBad(e.target.checked)} /> Только неисправные
             </label>
-          </div>
-          <div className="pills center">
-            <button className={tab === 'all' ? 'on' : ''} onClick={() => setTab('all')}>ВСЕ</button>
-            {techs.map((t) => (
-              <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>{t.name.toUpperCase()}</button>
-            ))}
-          </div>
-          <div className="grid">
-            {visible.map((r) => (
-              <button key={r.room} className={`card ${r.status}`} onClick={() => openCall(r.room)}>
-                <i className="bar" />
-                <h3>#{r.room} {r.category ? '' : 'АУД.'}<span>{r.category}</span></h3>
-                <p>{statusText[r.status]} | {r.techName}</p>
-                <b className="go" aria-hidden="true">▶</b>
-              </button>
-            ))}
-            {!visible.length && <p className="empty">Ничего не найдено.</p>}
-          </div>
+          </section>
+
+          <section className="panel">
+            <h2 className="sect"><GridIcon /> аудитории</h2>
+            <div className="grid">
+              {visible.map((r) => (
+                <button key={r.room} className={`tile ${r.status}`} onClick={() => openCall(r.room)}>
+                  <i className="dot" />
+                  <span className="tile-body">
+                    <b>Ауд. {r.room}{r.category && <em>{r.category}</em>}</b>
+                    <small>{statusText[r.status]} · {r.techName}</small>
+                  </span>
+                  <ChevronIcon />
+                </button>
+              ))}
+              {!visible.length && <p className="empty">Ничего не найдено.</p>}
+            </div>
+          </section>
         </>
       ) : (
         <>
-          <div className="pills center">
-            {techs.map((t) => (
-              <button key={t.id} className={techId === t.id ? 'on' : ''} onClick={() => { setTickets([]); setTechId(t.id); }}>{t.name.toUpperCase()}</button>
-            ))}
-          </div>
-          <p className="label">МОИ АУДИТОРИИ: {currentTech?.rooms.join(', ')}</p>
-          <div className="grid">
-            {queue.map((t) => (
-              <div key={t.id} className={`card static ${t.status}`}>
-                <i className="bar" />
-                <h3>#{t.room} <span>{t.category}</span></h3>
-                <p>{statusText[t.status]} | {t.teacher} · {time(t.at)}</p>
-                {t.text && <p className="desc">{t.text}</p>}
-                {t.status === 'new' && <button className="act" onClick={() => setStatus(t.id, 'take')}>Принять</button>}
-                {t.status === 'taken' && <button className="act" onClick={() => setStatus(t.id, 'done')}>Решено</button>}
-              </div>
-            ))}
-            {!queue.length && <p className="empty">Заявок нет — всё работает.</p>}
-          </div>
+          <section className="panel">
+            <div className="seg wide">
+              {techs.map((t) => (
+                <button key={t.id} className={techId === t.id ? 'on' : ''} onClick={() => { setTickets([]); setTechId(t.id); }}>{t.name}</button>
+              ))}
+            </div>
+            <p className="label">Мои аудитории: {currentTech?.rooms.join(', ')}</p>
+          </section>
+
+          <section className="panel">
+            <h2 className="sect"><ListIcon /> заявки</h2>
+            <div className="list">
+              {queue.map((t) => (
+                <div key={t.id} className={`tile static ${t.status}`}>
+                  <i className="dot" />
+                  <div className="tile-body">
+                    <b>Ауд. {t.room}<em>{t.category}</em></b>
+                    <small>{statusText[t.status]} · {t.teacher} · {time(t.at)}</small>
+                    {t.text && <p className="desc">{t.text}</p>}
+                  </div>
+                  {t.status === 'new' && <button className="act" onClick={() => setStatus(t.id, 'take')}>Принять</button>}
+                  {t.status === 'taken' && <button className="act ok" onClick={() => setStatus(t.id, 'done')}>Решено</button>}
+                </div>
+              ))}
+              {!queue.length && <p className="empty">Заявок нет — всё работает.</p>}
+            </div>
+          </section>
         </>
       )}
 
