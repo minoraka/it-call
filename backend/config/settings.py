@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "corsheaders",
     "rest_framework",
+    "drf_spectacular",
     "tickets",
 ]
 
@@ -56,7 +57,7 @@ TEMPLATES = [
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": os.environ.get("SQLITE_PATH", str(BASE_DIR / "db.sqlite3")),
     }
 }
 
@@ -70,7 +71,7 @@ TIME_ZONE = "Asia/Bishkek"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -81,6 +82,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"]
     + (["rest_framework.renderers.BrowsableAPIRenderer"] if DEBUG else []),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_THROTTLE_RATES": {
         
         "ticket_create": "60/min",
@@ -91,3 +93,11 @@ REST_FRAMEWORK = {
 # Выполненные заявки показываются в очереди специалиста ещё столько часов
 TICKETS_DONE_VISIBLE_HOURS = int(os.environ.get("TICKETS_DONE_VISIBLE_HOURS", "24"))
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "IT Call API",
+    "DESCRIPTION": "API системы вызова IT-специалиста.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+}
