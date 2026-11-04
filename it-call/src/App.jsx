@@ -1,18 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
+import { api } from './api';
 import './App.css';
 
-// Сотрудники и закреплённые за ними аудитории — замените на свои
-const seq = (floor) => [1, 2, 3, 4, 5, 6].map((n) => `${floor}0${n}`);
-const techs = [
-  { id: 1, name: 'Алишер', rooms: [...seq(1), ...seq(3), ...seq(5)] },
-  { id: 2, name: 'Француз', rooms: [...seq(2), ...seq(4), 'TS2', 'TS3', 'TS4', 'TS5', 'TS6'] },
-];
-const categories = ['Проектор', 'Компьютер', 'Интернет', 'Звук', 'Интерактивная доска', 'Другое'];
 const statusText = { ok: 'Всё работает', new: 'Вызов отправлен', taken: 'Специалист идёт', done: 'Решено' };
-const rooms = techs.flatMap((t) => t.rooms.map((r) => ({ room: r, tech: t })));
+const POLL_MS = 5000;
 
-const KEY = 'it-tickets';
-const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } };
 const time = (ts) => new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 const emptyForm = { teacher: '', room: '', category: '', text: '' };
 
@@ -24,15 +16,14 @@ const beep = () => {
   } catch { /* звук недоступен */ }
 };
 
-// Сюда подключается реальная отправка (Telegram-бот, push, SMS) через ваш сервер
-function notifyTech(tech, ticket) {
-  console.log(`Уведомление для ${tech.name}: ауд. ${ticket.room} — ${ticket.category}`);
-}
-
 function App() {
   const [role, setRole] = useState('teacher');
-  const [tickets, setTickets] = useState(load);
-  const [techId, setTechId] = useState(1);
+  const [techs, setTechs] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [rooms, setRooms] = useState([]);     // [{room, techId, techName, status, category}]
+  const [tickets, setTickets] = useState([]); // очередь выбранного специалиста
+  const [techId, setTechId] = useState(null);
+  const [loadError, setLoadError] = useState('');
   const [tab, setTab] = useState('all');
   const [q, setQ] = useState('');
   const [onlyBad, setOnlyBad] = useState(false);
@@ -40,63 +31,111 @@ function App() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
+  const [sending, setSending] = useState(false);
+  const toastTimer = useRef(null);
 
-  const ref = useRef({});
-  ref.current = { tickets, techId: role === 'tech' ? techId : null };
-  const save = (next) => { setTickets(next); localStorage.setItem(KEY, JSON.stringify(next)); };
+  const showToast = (msg) => {
+    setToast(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 4000);
+  };
 
+  // Справочники: специалисты, типы неисправностей
   useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key !== KEY) return;
-      const next = load();
-      const known = new Set(ref.current.tickets.map((t) => t.id));
-      const fresh = next.filter((t) => !known.has(t.id) && t.techId === ref.current.techId);
-      if (fresh.length) {
-        beep();
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('Вызов айтишника', { body: `Ауд. ${fresh[0].room}: ${fresh[0].category}` });
-        }
-      }
-      setTickets(next);
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    Promise.all([api.technicians(), api.categories()])
+      .then(([t, c]) => {
+        setTechs(t);
+        setCategories(c);
+        setTechId((cur) => cur ?? t[0]?.id ?? null);
+      })
+      .catch(() => setLoadError('Не удалось подключиться к серверу. Запущен ли бэкенд?'));
   }, []);
 
-  const active = (room) => tickets.filter((t) => t.room === room && t.status !== 'done');
-  const roomStatus = (room) => {
-    const a = active(room);
-    return a.some((t) => t.status === 'new') ? 'new' : a.length ? 'taken' : 'ok';
-  };
-  const faulty = rooms.filter((r) => roomStatus(r.room) !== 'ok').length;
+  // Живое обновление (раньше было событие storage): опрос сервера.
+  // Преподаватель — статусы аудиторий, специалист — своя очередь + звук/уведомление о новых заявках.
+  useEffect(() => {
+    if (role === 'tech' && techId == null) return;
+    let stopped = false;
+    let known = null; // id заявок, которые уже видели; null до первой загрузки
+
+    const tick = async () => {
+      try {
+        if (role === 'teacher') {
+          const next = await api.rooms();
+          if (!stopped) { setRooms(next); setLoadError(''); }
+        } else {
+          const next = await api.tickets({ techId });
+          if (stopped) return;
+          if (known) {
+            const fresh = next.filter((t) => t.status === 'new' && !known.has(t.id));
+            if (fresh.length) {
+              beep();
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('Вызов айтишника', { body: `Ауд. ${fresh[0].room}: ${fresh[0].category}` });
+              }
+            }
+          }
+          known = new Set(next.map((t) => t.id));
+          setTickets(next);
+          setLoadError('');
+        }
+      } catch {
+        if (!stopped) setLoadError('Нет связи с сервером. Повторяем…');
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, POLL_MS);
+    return () => { stopped = true; clearInterval(id); };
+  }, [role, techId]);
+
+  // Список аудиторий для преподавателя нужен и в форме — подгружаем один раз при старте
+  useEffect(() => { api.rooms().then(setRooms).catch(() => {}); }, []);
+
+  const faulty = rooms.filter((r) => r.status !== 'ok').length;
 
   const visible = rooms.filter((r) =>
-    (tab === 'all' || r.tech.id === tab) &&
+    (tab === 'all' || r.techId === tab) &&
     r.room.toLowerCase().includes(q.trim().toLowerCase()) &&
-    (!onlyBad || roomStatus(r.room) !== 'ok'));
+    (!onlyBad || r.status !== 'ok'));
   const resetFilters = () => { setTab('all'); setQ(''); setOnlyBad(false); };
 
   const openCall = (room = '') => { setForm({ ...form, room, category: '', text: '' }); setError(''); setModal(true); };
   const field = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
-  const send = (e) => {
+  const send = async (e) => {
     e.preventDefault();
     if (!form.teacher.trim() || !form.room || !form.category) {
       setError('Укажите имя, аудиторию и тип неисправности.');
       return;
     }
-    const tech = rooms.find((r) => r.room === form.room).tech;
-    const ticket = { id: Date.now(), ...form, teacher: form.teacher.trim(), techId: tech.id, status: 'new', at: Date.now() };
-    save([ticket, ...tickets]);
-    notifyTech(tech, ticket);
-    setModal(false);
-    setToast(`Заявка отправлена: ${tech.name}, ауд. ${form.room}`);
-    setTimeout(() => setToast(''), 4000);
+    setSending(true);
+    try {
+      const ticket = await api.createTicket({ ...form, teacher: form.teacher.trim() });
+      const tech = techs.find((t) => t.id === ticket.techId);
+      setModal(false);
+      showToast(`Заявка отправлена: ${tech?.name ?? ''}, ауд. ${ticket.room}`);
+      api.rooms().then(setRooms).catch(() => {});
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSending(false);
+    }
   };
 
-  const setStatus = (id, status) => save(tickets.map((t) => (t.id === id ? { ...t, status } : t)));
-  const queue = tickets.filter((t) => t.techId === techId).sort((a, b) => (a.status === 'done') - (b.status === 'done') || b.at - a.at);
-  const modalTech = form.room && rooms.find((r) => r.room === form.room).tech;
+  const setStatus = async (id, action) => {
+    try {
+      const updated = await api[action](id);
+      setTickets((ts) => ts.map((t) => (t.id === id ? updated : t)));
+    } catch (err) {
+      showToast(err.message);
+      api.tickets({ techId }).then(setTickets).catch(() => {}); // подтянуть актуальное состояние
+    }
+  };
+
+  const queue = [...tickets].sort((a, b) => (a.status === 'done') - (b.status === 'done') || b.at - a.at);
+  const modalRoom = form.room && rooms.find((r) => r.room === form.room);
+  const currentTech = techs.find((t) => t.id === techId);
 
   return (
     <div className="app">
@@ -115,6 +154,8 @@ function App() {
         </button>
       </div>
 
+      {loadError && <p className="error" role="alert">{loadError}</p>}
+
       {role === 'teacher' ? (
         <>
           <div className="filters">
@@ -131,18 +172,14 @@ function App() {
             ))}
           </div>
           <div className="grid">
-            {visible.map(({ room, tech }) => {
-              const s = roomStatus(room);
-              const a = active(room)[0];
-              return (
-                <button key={room} className={`card ${s}`} onClick={() => openCall(room)}>
-                  <i className="bar" />
-                  <h3>#{room} {a ? '' : 'АУД.'}<span>{a ? a.category : ''}</span></h3>
-                  <p>{statusText[s]} | {tech.name}</p>
-                  <b className="go" aria-hidden="true">▶</b>
-                </button>
-              );
-            })}
+            {visible.map((r) => (
+              <button key={r.room} className={`card ${r.status}`} onClick={() => openCall(r.room)}>
+                <i className="bar" />
+                <h3>#{r.room} {r.category ? '' : 'АУД.'}<span>{r.category}</span></h3>
+                <p>{statusText[r.status]} | {r.techName}</p>
+                <b className="go" aria-hidden="true">▶</b>
+              </button>
+            ))}
             {!visible.length && <p className="empty">Ничего не найдено.</p>}
           </div>
         </>
@@ -150,10 +187,10 @@ function App() {
         <>
           <div className="pills center">
             {techs.map((t) => (
-              <button key={t.id} className={techId === t.id ? 'on' : ''} onClick={() => setTechId(t.id)}>{t.name.toUpperCase()}</button>
+              <button key={t.id} className={techId === t.id ? 'on' : ''} onClick={() => { setTickets([]); setTechId(t.id); }}>{t.name.toUpperCase()}</button>
             ))}
           </div>
-          <p className="label">МОИ АУДИТОРИИ: {techs.find((t) => t.id === techId).rooms.join(', ')}</p>
+          <p className="label">МОИ АУДИТОРИИ: {currentTech?.rooms.join(', ')}</p>
           <div className="grid">
             {queue.map((t) => (
               <div key={t.id} className={`card static ${t.status}`}>
@@ -161,7 +198,7 @@ function App() {
                 <h3>#{t.room} <span>{t.category}</span></h3>
                 <p>{statusText[t.status]} | {t.teacher} · {time(t.at)}</p>
                 {t.text && <p className="desc">{t.text}</p>}
-                {t.status === 'new' && <button className="act" onClick={() => setStatus(t.id, 'taken')}>Принять</button>}
+                {t.status === 'new' && <button className="act" onClick={() => setStatus(t.id, 'take')}>Принять</button>}
                 {t.status === 'taken' && <button className="act" onClick={() => setStatus(t.id, 'done')}>Решено</button>}
               </div>
             ))}
@@ -187,7 +224,7 @@ function App() {
                 ))}
               </select>
             </label>
-            {modalTech && <p className="hint">Заявку получит: <b>{modalTech.name}</b></p>}
+            {modalRoom && <p className="hint">Заявку получит: <b>{modalRoom.techName}</b></p>}
             <div className="chips">
               {categories.map((c) => (
                 <button type="button" key={c} className={form.category === c ? 'on' : ''} onClick={() => setForm({ ...form, category: c })}>{c}</button>
@@ -199,7 +236,7 @@ function App() {
             {error && <p className="error" role="alert">{error}</p>}
             <div className="row">
               <button type="button" className="reset" onClick={() => setModal(false)}>Отмена</button>
-              <button type="submit" className="cta">Отправить</button>
+              <button type="submit" className="cta" disabled={sending}>{sending ? 'Отправка…' : 'Отправить'}</button>
             </div>
           </form>
         </div>
