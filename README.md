@@ -4,7 +4,7 @@ React (Vite) + Django REST Framework.
 
 ## Запуск одной командой
 
-Нужны: **Python 3.10+** и **Node.js 20.19+ (или 22.12+)**.
+Нужны: **Python 3.10+** и **Node.js 18+**.
 
 - Windows: двойной клик по `start.bat`
 - Linux / macOS: `./start.sh`
@@ -53,30 +53,3 @@ npm install && npm run dev
 
 API открытый (как и сам фронт, без входа). Для публикации в интернет добавьте авторизацию специалистов
 и используйте gunicorn + nginx вместо dev-серверов.
-
-
-## Docker
-
-Требуется установленный Docker Desktop (Windows/macOS) или Docker Engine + Compose plugin.
-
-```bash
-# Из корня проекта
-docker compose up --build
-```
-
-После запуска:
-
-- Приложение: `http://localhost:8080`
-- API: `http://localhost:8080/api/`
-- Swagger UI: `http://localhost:8080/api/docs/`
-- ReDoc: `http://localhost:8080/api/redoc/`
-- OpenAPI JSON: `http://localhost:8080/api/schema/`
-- Админка: `http://localhost:8080/admin/`
-
-Перед публикацией в интернет скопируйте `.env.example` в `.env`, задайте длинный
-случайный `DJANGO_SECRET_KEY` и свой `DJANGO_ALLOWED_HOSTS`. Для остановки:
-`docker compose down`. Данные SQLite сохраняются в Docker volume `backend_data`;
-для полного удаления данных используйте `docker compose down -v`.
-
-Swagger доступен без авторизации, как и существующий API. Не публикуйте проект в интернет
-до настройки аутентификации и прав доступа для операций принятия/закрытия заявок.
