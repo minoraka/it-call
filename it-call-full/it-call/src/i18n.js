@@ -114,7 +114,6 @@ export const STRINGS = {
   },
 };
 
-
 const CATEGORY_EN = {
   'Проектор': 'Projector',
   'Компьютер': 'Computer',

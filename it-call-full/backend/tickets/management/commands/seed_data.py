@@ -17,7 +17,16 @@ TECHS = [
 class Command(BaseCommand):
     help = "Создаёт специалистов и аудитории (идемпотентно)"
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--if-empty", action="store_true",
+            help="Ничего не делать, если специалисты уже есть (для автозапуска в Docker)",
+        )
+
     def handle(self, *args, **options):
+        if options["if_empty"] and Technician.objects.exists():
+            self.stdout.write("Данные уже есть, пропускаю.")
+            return
         for name, rooms in TECHS:
             tech, _ = Technician.objects.get_or_create(name=name)
             for number in rooms:

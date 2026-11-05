@@ -15,6 +15,20 @@ python manage.py test               # тесты
 
 Специалистов, аудитории и закрепления можно менять в админке `/admin/`.
 
+## Документация API (Swagger)
+
+Запустите бэкенд и откройте:
+
+| Адрес | Что это |
+|---|---|
+| http://localhost:8000/api/docs/ | **Swagger UI** — можно читать описание и отправлять запросы прямо из браузера (кнопка *Try it out*) |
+| http://localhost:8000/api/redoc/ | ReDoc — та же документация в виде красивой справки |
+| http://localhost:8000/api/schema/ | сырая схема OpenAPI (для Postman, генераторов клиентов) |
+
+Документация строится из кода автоматически (`drf-spectacular`), поэтому всегда совпадает с реальным API.
+Swagger работает без интернета: его файлы лежат в пакете `drf-spectacular-sidecar`.
+Проверка схемы: `python manage.py spectacular --validate --fail-on-warn`.
+
 ## API
 
 | Метод | URL | Что делает |

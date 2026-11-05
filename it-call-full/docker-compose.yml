@@ -1,0 +1,36 @@
+# Запуск: docker compose up -d --build
+# Сайт: http://localhost:8080   Swagger: http://localhost:8080/api/docs/   Админка: http://localhost:8080/admin/
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-}          # пусто = сгенерируется сам и сохранится в томе
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-*}   # для доступа из интернета укажите свой домен/IP
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
+      DJANGO_SUPERUSER_USERNAME: ${ADMIN_USER:-}
+      DJANGO_SUPERUSER_PASSWORD: ${ADMIN_PASSWORD:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TZ: ${TZ:-Asia/Bishkek}
+      NUM_PROXIES: "1"                                   # перед Django стоит nginx
+    volumes:
+      - db_data:/data                                    # база и ключ переживают пересборку контейнеров
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/api/categories/', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  web:
+    build: ./it-call
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  db_data:

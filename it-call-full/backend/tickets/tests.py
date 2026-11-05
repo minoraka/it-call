@@ -74,7 +74,7 @@ class TicketApiTests(APITestCase):
 
         self.client.post(f"/api/tickets/{a}/take/")
         self.client.post(f"/api/tickets/{a}/done/")
-        self.assertEqual(len(self.client.get("/api/tickets/").data), 2)  # свежая решённая ещё видна
+        self.assertEqual(len(self.client.get("/api/tickets/").data), 2)  
         Ticket.objects.filter(pk=a).update(done_at=timezone.now() - timedelta(days=3))
         self.assertEqual(len(self.client.get("/api/tickets/").data), 1)
         self.assertEqual(len(self.client.get("/api/tickets/?history=1").data), 2)
@@ -84,9 +84,29 @@ class TicketApiTests(APITestCase):
         future = int((timezone.now() + timedelta(seconds=5)).timestamp() * 1000)
         self.assertEqual(self.client.get(f"/api/tickets/?since={future}").data, [])
         self.assertEqual(len(self.client.get("/api/tickets/?since=0").data), 1)
-        self.assertEqual(len(self.client.get("/api/tickets/?since=abc").data), 1)  # мусор игнорируется
-
+        self.assertEqual(len(self.client.get("/api/tickets/?since=abc").data), 1)  
     def test_technicians_and_categories(self):
         data = self.client.get("/api/technicians/").data
         self.assertEqual(data[0], {"id": self.t1.id, "name": "Алишер", "rooms": ["101"]})
         self.assertIn("Проектор", self.client.get("/api/categories/").data)
+
+
+class ApiDocsTests(APITestCase):
+    def test_schema_describes_all_endpoints(self):
+        r = self.client.get("/api/schema/?format=json")
+        self.assertEqual(r.status_code, 200)
+        paths = r.json()["paths"]
+        for p in ["/api/tickets/", "/api/tickets/{id}/take/", "/api/tickets/{id}/done/",
+                  "/api/rooms/", "/api/technicians/", "/api/categories/"]:
+            self.assertIn(p, paths)
+
+    def test_swagger_and_redoc_pages(self):
+        self.assertEqual(self.client.get("/api/docs/").status_code, 200)
+        self.assertEqual(self.client.get("/api/redoc/").status_code, 200)
+
+    def test_seed_if_empty_does_not_resurrect_deleted_data(self):
+        from django.core.management import call_command
+        call_command("seed_data", verbosity=0)
+        Room.objects.filter(number="101").delete()
+        call_command("seed_data", "--if-empty", verbosity=0)
+        self.assertFalse(Room.objects.filter(number="101").exists())

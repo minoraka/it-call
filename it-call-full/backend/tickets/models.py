@@ -49,7 +49,7 @@ class Ticket(models.Model):
 
     teacher = models.CharField("Преподаватель", max_length=100)
     room = models.ForeignKey(Room, on_delete=models.PROTECT, related_name="tickets", verbose_name="Аудитория")
-    # Специалист фиксируется на момент создания: смена закрепления аудитории не трогает старые заявки
+  
     technician = models.ForeignKey(
         Technician, on_delete=models.PROTECT, related_name="tickets", verbose_name="Специалист",
     )

@@ -8,19 +8,19 @@ async function request(path, options = {}) {
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    // DRF отдаёт ошибки валидации как { поле: ['текст'] } или { detail: 'текст' }
+   
     const msg = data?.detail ?? (data && Object.values(data).flat().join(' ')) ?? 'Server error';
     const err = new Error(msg);
-    err.status = res.status; 
+    err.status = res.status;
     throw err;
   }
   return data;
 }
 
 export const api = {
-  technicians: () => request('/technicians/'),                       // [{id, name, rooms: [...]}]
-  categories: () => request('/categories/'),                         // ['Проектор', ...]
-  rooms: () => request('/rooms/'),                                   // [{room, techId, techName, status, category}]
+  technicians: () => request('/technicians/'),                       
+  categories: () => request('/categories/'),                        
+  rooms: () => request('/rooms/'),                                 
   tickets: (params = {}) => request(`/tickets/?${new URLSearchParams(params)}`),
   createTicket: (body) => request('/tickets/', { method: 'POST', body: JSON.stringify(body) }),
   take: (id) => request(`/tickets/${id}/take/`, { method: 'POST' }),

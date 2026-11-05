@@ -67,12 +67,12 @@ function App() {
     toastTimer.current = setTimeout(() => setToast(''), 4000);
   };
 
-  // Ошибка API -> ключ перевода (тексты ошибок сервера всегда русские, поэтому по статусу)
+
   const errKey = (err) => (err.status === 409 ? 'err.conflict' : err.status ? 'err.invalid' : 'err.network');
 
   const time = (ts) => new Date(ts).toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
 
- 
+
   useEffect(() => {
     Promise.all([api.technicians(), api.categories()])
       .then(([tc, c]) => {
@@ -123,7 +123,7 @@ function App() {
     return () => { stopped = true; clearInterval(id); };
   }, [role, techId]);
 
- 
+
   useEffect(() => { api.rooms().then(setRooms).catch(() => {}); }, []);
 
   const faulty = rooms.filter((r) => r.status !== 'ok').length;
